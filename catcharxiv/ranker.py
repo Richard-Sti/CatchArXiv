@@ -131,7 +131,9 @@ def rank_by_similarity(papers, keywords=None, title_weight=3.0):
 
     # Normalize by max score so best paper ~ 100%
     max_score = max(s for _, s in raw_scores) if raw_scores else 1
-    ranked = [(p, s / max_score if max_score > 0 else 0) for p, s in raw_scores]
+    ranked = [
+        (p, s / max_score if max_score > 0 else 0) for p, s in raw_scores
+    ]
 
     ranked.sort(key=lambda x: x[1], reverse=True)
     return ranked
@@ -209,7 +211,8 @@ def rank_with_claude(papers, top_n=30, model="claude-sonnet-4-20250514"):
         for i, (paper, _) in enumerate(uncached_papers):
             papers_text += f"\n[{i+1}] {paper.title}\n{paper.abstract[:600]}\n"
 
-        prompt = f"""You are helping a cosmology researcher filter daily arXiv papers. Rate each paper's relevance from 1-100%.
+        prompt = f"""You are helping a cosmology researcher filter arXiv papers.
+Rate each paper's relevance from 1-100%.
 
 RESEARCHER'S FOCUS AREAS:
 {research_desc}
@@ -218,16 +221,16 @@ RELEVANT KEYWORDS:
 {keywords_text}
 
 SCORING RUBRIC:
-90-100%: Directly addresses my research questions, uses same methods/data, must read
-70-89%: Closely related topic, relevant methodology, results I should know about
-50-69%: Tangentially related, useful background or might cite
+90-100%: Directly addresses my research, must read
+70-89%: Closely related, relevant methodology
+50-69%: Tangentially related, useful background
 30-49%: Same broad field but different focus
 1-29%: Unrelated to my research
 
 PAPERS:
 {papers_text}
 
-Return ONLY valid JSON mapping paper numbers to integer scores (1-100):
+Return ONLY valid JSON mapping paper numbers to scores (1-100):
 {{"1": 85, "2": 30, "3": 95, ...}}"""
 
         # Call Claude API
