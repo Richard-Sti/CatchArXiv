@@ -67,10 +67,12 @@ distance ladder with careful treatment of selection effects...
 
 **`scripts/.env`** - Required configuration:
 ```
-ANTHROPIC_API_KEY=sk-ant-...                         # for --claude mode
 CATCHARXIV_OUTPUT_DIR=~/Downloads                    # where to save HTML
 CATCHARXIV_CATEGORIES=astro-ph.CO,astro-ph.GA,astro-ph.IM  # arXiv categories
+ANTHROPIC_API_KEY=sk-ant-...                         # only needed for --claude
 ```
+
+Note: `ANTHROPIC_API_KEY` is only required if using `--claude` mode. Keyword ranking (`--rank`) works without it.
 
 ## Usage
 
