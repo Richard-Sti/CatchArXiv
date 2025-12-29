@@ -70,7 +70,9 @@ def main():
         "sonnet": "claude-sonnet-4-20250514",
     }
 
-    categories = ("astro-ph.CO", "astro-ph.GA", "astro-ph.IM")
+    categories = tuple(
+        c.strip() for c in os.environ["CATCHARXIV_CATEGORIES"].split(",")
+    )
 
     # Default: fetch latest announcement (like arXiv/new)
     # --days N overrides to fetch N days instead
@@ -179,7 +181,8 @@ def main():
         method = "unranked"
 
     filename = f"catcharxiv_{date_str}_{method}.html"
-    output_file = Path.home() / "Downloads" / filename
+    output_dir = Path(os.environ["CATCHARXIV_OUTPUT_DIR"]).expanduser()
+    output_file = output_dir / filename
     output_file.write_text(html)
     print(f"Saved to {output_file}")
     webbrowser.open(f"file://{output_file}")

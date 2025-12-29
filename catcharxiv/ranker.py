@@ -16,11 +16,11 @@
 
 import hashlib
 import json
-import math
 import re
 from pathlib import Path
 
 import anthropic
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -76,34 +76,55 @@ def load_keywords(path=None):
     return keywords
 
 
-def compute_idf(papers, keywords):
+def expand_keyword(kw):
+    """Expand keyword to include common variations (plurals, etc.)."""
+    variations = [kw]
+
+    # Handle plurals
+    if kw.endswith("y"):
+        variations.append(kw[:-1] + "ies")  # velocity -> velocities
+    elif kw.endswith("s"):
+        variations.append(kw[:-1])  # simulations -> simulation
+    else:
+        variations.append(kw + "s")  # simulation -> simulations
+        variations.append(kw + "es")  # batch -> batches
+
+    # Handle hyphenation variations
+    if " " in kw:
+        variations.append(kw.replace(" ", "-"))  # Type Ia -> Type-Ia
+    if "-" in kw:
+        variations.append(kw.replace("-", " "))  # Type-Ia -> Type Ia
+
+    return variations
+
+
+def count_keyword_matches(text, keyword):
     """
-    Compute IDF weights for keywords based on paper corpus.
+    Count keyword matches using word boundaries.
 
-    IDF = log(N / (1 + df)) where df is number of papers containing keyword.
+    Returns count of matches for keyword and its variations.
     """
-    n_papers = len(papers)
-    if n_papers == 0:
-        return {kw: 1.0 for kw in keywords}
+    text_lower = text.lower()
+    total = 0
 
-    idf = {}
-    for kw in keywords:
-        doc_freq = sum(
-            1 for p in papers
-            if kw in (p.title + " " + p.abstract).lower()
-        )
-        # Add 1 to avoid division by zero, use log for IDF
-        idf[kw] = math.log(n_papers / (1 + doc_freq)) + 1
+    for variant in expand_keyword(keyword):
+        # Use word boundaries to avoid partial matches
+        pattern = r'\b' + re.escape(variant) + r'\b'
+        total += len(re.findall(pattern, text_lower, re.IGNORECASE))
 
-    return idf
+    return total
 
 
 def rank_by_similarity(papers, keywords=None, title_weight=3.0):
     """
     Rank papers by TF-IDF weighted keyword matches.
 
-    Keywords appearing in fewer papers get higher weight.
-    Title matches are upweighted.
+    Uses scikit-learn TfidfVectorizer for proper text processing:
+    - Word boundary matching (no partial matches)
+    - Term frequency (counts occurrences)
+    - IDF weighting (rare keywords score higher)
+    - Handles plurals and hyphenation variants
+    - Title matches upweighted
 
     Parameters
     ----------
@@ -125,21 +146,57 @@ def rank_by_similarity(papers, keywords=None, title_weight=3.0):
     if not papers or not keywords:
         return [(p, 0.0) for p in papers]
 
-    # Compute IDF weights
-    idf = compute_idf(papers, keywords)
+    # Build corpus for IDF calculation
+    corpus = [p.title + " " + p.abstract for p in papers]
 
-    # Compute raw scores
+    # Fit TF-IDF vectorizer on corpus to get IDF weights
+    vectorizer = TfidfVectorizer(
+        lowercase=True,
+        token_pattern=r'\b\w+\b',  # Word boundaries
+        ngram_range=(1, 3),  # Unigrams, bigrams, trigrams for phrases
+        use_idf=True,
+        smooth_idf=True,
+    )
+    vectorizer.fit(corpus)
+
+    # Get IDF values (use max IDF for unknown terms)
+    vocab = vectorizer.vocabulary_
+    idf_values = vectorizer.idf_
+    max_idf = max(idf_values) if len(idf_values) > 0 else 1.0
+
+    def get_idf(term):
+        """Get IDF for a term, handling multi-word phrases."""
+        term_lower = term.lower()
+        # Try exact match first
+        if term_lower in vocab:
+            return idf_values[vocab[term_lower]]
+        # Try individual words and average
+        words = term_lower.split()
+        if len(words) > 1:
+            idfs = [idf_values[vocab[w]] for w in words if w in vocab]
+            if idfs:
+                return sum(idfs) / len(idfs)
+        return max_idf  # Rare term gets high weight
+
+    # Score each paper
     raw_scores = []
     for paper in papers:
-        title = paper.title.lower()
-        abstract = paper.abstract.lower()
+        title = paper.title
+        abstract = paper.abstract
 
-        score = 0
+        score = 0.0
         for kw in keywords:
-            if kw in title:
-                score += idf[kw] * title_weight
-            elif kw in abstract:
-                score += idf[kw]
+            idf = get_idf(kw)
+
+            # Count matches in title (with weight) and abstract
+            title_count = count_keyword_matches(title, kw)
+            abstract_count = count_keyword_matches(abstract, kw)
+
+            # TF-IDF style scoring
+            if title_count > 0:
+                score += (1 + title_count) * idf * title_weight
+            if abstract_count > 0:
+                score += (1 + abstract_count) * idf
 
         raw_scores.append((paper, score))
 

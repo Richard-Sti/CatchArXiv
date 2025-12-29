@@ -17,7 +17,7 @@ from setuptools import setup, find_packages
 setup(
     name="catcharxiv",
     version="0.1.0",
-    description="Daily arXiv paper recommendations using Claude API",
+    description="Daily arXiv paper recommendations with keyword and optional Claude AI ranking",
     author="Richard Stiskalek",
     author_email="richard.stiskalek@physics.ox.ac.uk",
     url="https://github.com/rstiskalek/catcharxiv",
@@ -27,5 +27,6 @@ setup(
         "arxiv",
         "anthropic",
         "jinja2",
+        "scikit-learn",
     ],
 )
