@@ -1,0 +1,36 @@
+# Claude
+CLAUDE.md
+
+# API keys
+scripts/.env
+
+# Virtual environment
+venv_arxiv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output files
+output/
+*.log
+
+# Data files (keywords, cache, etc.)
+data/
