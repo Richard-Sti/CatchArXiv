@@ -170,7 +170,7 @@ def rank_with_claude(papers, top_n=30, model="claude-sonnet-4-20250514"):
         (paper, score) sorted by score descending.
     """
     if not papers:
-        return []
+        return [], {}, {}
 
     # First pass: keyword ranking
     keywords = load_keywords()
@@ -181,7 +181,7 @@ def rank_with_claude(papers, top_n=30, model="claude-sonnet-4-20250514"):
     remaining = keyword_ranked[top_n:]
 
     if not candidates or not keywords:
-        return keyword_ranked
+        return keyword_ranked, {}, {}
 
     # Load cache
     cache = load_cache()
@@ -191,7 +191,13 @@ def rank_with_claude(papers, top_n=30, model="claude-sonnet-4-20250514"):
     uncached_papers = []
     for paper, kw_score in candidates:
         if paper.arxiv_id in cache:
-            cached_papers.append((paper, cache[paper.arxiv_id] / 100.0))
+            cached = cache[paper.arxiv_id]
+            # Handle old cache format (just score) and new format (dict)
+            if isinstance(cached, dict):
+                score = cached.get("score", 50) / 100.0
+            else:
+                score = cached / 100.0
+            cached_papers.append((paper, score))
         else:
             uncached_papers.append((paper, kw_score))
 
@@ -211,8 +217,9 @@ def rank_with_claude(papers, top_n=30, model="claude-sonnet-4-20250514"):
         for i, (paper, _) in enumerate(uncached_papers):
             papers_text += f"\n[{i+1}] {paper.title}\n{paper.abstract[:600]}\n"
 
-        prompt = f"""You are helping a cosmology researcher filter arXiv papers.
-Rate each paper's relevance from 1-100%.
+        prompt = f"""You are helping a researcher filter daily arXiv papers.
+Rate each paper's relevance from 1-100%, list matching keywords,
+and for papers scoring 75%+, write a one-sentence summary.
 
 RESEARCHER'S FOCUS AREAS:
 {research_desc}
@@ -230,8 +237,8 @@ SCORING RUBRIC:
 PAPERS:
 {papers_text}
 
-Return ONLY valid JSON mapping paper numbers to scores (1-100):
-{{"1": 85, "2": 30, "3": 95, ...}}"""
+Return ONLY valid JSON. Include "summary" only if score >= 75:
+{{"1": {{"score": 85, "keywords": ["H0"], "summary": "..."}}, "2": ...}}"""
 
         # Call Claude API
         client = anthropic.Anthropic()
@@ -244,20 +251,31 @@ Return ONLY valid JSON mapping paper numbers to scores (1-100):
         # Parse response
         response_text = response.content[0].text
         try:
-            json_match = re.search(r'\{[^{}]+\}', response_text)
+            # Find JSON object (may be nested)
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                scores_dict = json.loads(json_match.group())
+                results_dict = json.loads(json_match.group())
             else:
                 raise ValueError("No JSON found in response")
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Warning: Could not parse Claude response: {e}")
-            return keyword_ranked
+            return keyword_ranked, {}, {}
 
         # Apply Claude scores and update cache
         claude_ranked = list(cached_papers)
         for i, (paper, kw_score) in enumerate(uncached_papers):
-            score = scores_dict.get(str(i + 1), 50)
-            cache[paper.arxiv_id] = score
+            result = results_dict.get(str(i + 1), {})
+            if isinstance(result, dict):
+                score = result.get("score", 50)
+                kws = result.get("keywords", [])
+                summary = result.get("summary", "")
+            else:
+                score = result
+                kws = []
+                summary = ""
+            cache[paper.arxiv_id] = {
+                "score": score, "keywords": kws, "summary": summary
+            }
             claude_ranked.append((paper, score / 100.0))
 
         save_cache(cache)
@@ -272,4 +290,14 @@ Return ONLY valid JSON mapping paper numbers to scores (1-100):
         remaining_scaled = [(p, s * min_claude * 0.9) for p, s in remaining]
         claude_ranked.extend(remaining_scaled)
 
-    return claude_ranked
+    # Build keywords and summaries dicts from cache
+    keywords_dict = {}
+    summaries_dict = {}
+    for paper, _ in claude_ranked:
+        cached = cache.get(paper.arxiv_id, {})
+        if isinstance(cached, dict):
+            keywords_dict[paper.arxiv_id] = cached.get("keywords", [])
+            if cached.get("summary"):
+                summaries_dict[paper.arxiv_id] = cached.get("summary")
+
+    return claude_ranked, keywords_dict, summaries_dict

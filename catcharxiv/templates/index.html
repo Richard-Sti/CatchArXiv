@@ -89,6 +89,19 @@
             font-weight: 600;
             margin-right: 10px;
         }
+        .pdf-btn {
+            background: #dc2626;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-decoration: none;
+            margin-left: 8px;
+        }
+        .pdf-btn:hover {
+            background: #b91c1c;
+        }
         .count { color: #666; margin-bottom: 15px; }
     </style>
 </head>
@@ -112,6 +125,7 @@
             <div class="paper-title">
                 <span class="rank">#{{ loop.index }}</span>
                 <a href="{{ paper.url }}" target="_blank">{{ paper.title }}</a>
+                <a href="https://arxiv.org/pdf/{{ paper.arxiv_id }}.pdf" target="_blank" class="pdf-btn">PDF</a>
             </div>
             <div class="paper-meta">
                 {{ paper.authors[:5]|join(", ") }}

@@ -99,11 +99,45 @@
             margin-right: 10px;
         }
         .count { color: #666; margin-bottom: 15px; }
+        .keywords {
+            display: inline-flex;
+            gap: 4px;
+            margin-left: 8px;
+            flex-wrap: wrap;
+        }
+        .keyword {
+            background: #10b981;
+            color: white;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 0.75em;
+        }
+        .summary {
+            font-size: 0.9em;
+            color: #1e40af;
+            font-style: italic;
+            margin: 6px 0;
+            padding-left: 10px;
+            border-left: 3px solid #3b82f6;
+        }
+        .pdf-btn {
+            background: #dc2626;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-decoration: none;
+            margin-left: 8px;
+        }
+        .pdf-btn:hover {
+            background: #b91c1c;
+        }
     </style>
 </head>
 <body>
-    <h1>CatchArXiv - Ranked by {{ rank_method|default('Keywords') }}</h1>
-    <p class="count">{{ papers|length }} papers from the last {{ days }} days</p>
+    <h1>CatchArXiv - Ranked by {{ rank_method|default('Keywords') }}{% if paper_date %} ({{ paper_date }}){% endif %}</h1>
+    <p class="count">{{ papers|length }} papers</p>
 
     <div class="tabs">
         {% for cat in categories %}
@@ -122,6 +156,14 @@
                 <span class="rank">#{{ loop.index }}</span>
                 <span class="score">{{ "%.0f"|format(scores.get(paper.arxiv_id, 0) * 100) }}%</span>
                 <a href="{{ paper.url }}" target="_blank">{{ paper.title }}</a>
+                <a href="https://arxiv.org/pdf/{{ paper.arxiv_id }}.pdf" target="_blank" class="pdf-btn">PDF</a>
+                {% if keywords and keywords.get(paper.arxiv_id) %}
+                <span class="keywords">
+                    {% for kw in keywords.get(paper.arxiv_id, []) %}
+                    <span class="keyword">{{ kw }}</span>
+                    {% endfor %}
+                </span>
+                {% endif %}
             </div>
             <div class="paper-meta">
                 {{ paper.authors[:5]|join(", ") }}
@@ -133,6 +175,9 @@
                     {% endfor %}
                 </span>
             </div>
+            {% if summaries and summaries.get(paper.arxiv_id) %}
+            <div class="summary">{{ summaries.get(paper.arxiv_id) }}</div>
+            {% endif %}
             <div class="paper-abstract">
                 {{ paper.abstract[:800] }}
                 {% if paper.abstract|length > 800 %}...{% endif %}
