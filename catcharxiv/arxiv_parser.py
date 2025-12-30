@@ -14,10 +14,12 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """arXiv paper fetcher for recent submissions."""
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import arxiv
+import feedparser
 
 
 @dataclass
@@ -102,9 +104,83 @@ def fetch_recent_papers(
     return papers
 
 
+def fetch_new_papers(categories=("astro-ph.CO", "astro-ph.GA", "astro-ph.IM")):
+    """
+    Fetch today's new arXiv papers from RSS feeds.
+
+    Uses RSS to get exact announcement list, then fetches full metadata via API.
+
+    Parameters
+    ----------
+    categories : tuple of str
+        arXiv category identifiers to fetch.
+
+    Returns
+    -------
+    list of Paper
+        Papers from today's announcement, deduplicated.
+    """
+    seen_ids = set()
+    all_ids = []
+
+    # Fetch RSS for each category
+    for cat in categories:
+        feed_url = f"https://rss.arxiv.org/rss/{cat}"
+        feed = feedparser.parse(feed_url)
+
+        for entry in feed.entries:
+            # Include new submissions and cross-lists, but not replacements
+            announce_type = getattr(entry, 'arxiv_announce_type', '')
+            if announce_type not in ('new', 'cross'):
+                continue
+
+            # Extract arXiv ID from link
+            # Link format: http://arxiv.org/abs/2512.22356v1
+            match = re.search(r'(\d{4}\.\d{4,5})(v\d+)?', entry.link)
+            if match:
+                arxiv_id = match.group(1)
+                if arxiv_id not in seen_ids:
+                    seen_ids.add(arxiv_id)
+                    all_ids.append(arxiv_id)
+
+    if not all_ids:
+        return []
+
+    # Fetch full metadata via API
+    client = arxiv.Client()
+    search = arxiv.Search(id_list=all_ids)
+
+    papers = []
+    categories_set = set(categories)
+
+    for result in client.results(search):
+        # Check if paper has any of our target categories
+        if not categories_set.intersection(result.categories):
+            continue
+
+        arxiv_id = result.entry_id.split("/")[-1]
+        # Remove version suffix for consistency
+        arxiv_id = re.sub(r'v\d+$', '', arxiv_id)
+
+        paper = Paper(
+            arxiv_id=arxiv_id,
+            title=result.title.replace("\n", " "),
+            abstract=result.summary.replace("\n", " "),
+            authors=[a.name for a in result.authors],
+            categories=result.categories,
+            published=result.published,
+            url=result.entry_id,
+        )
+        papers.append(paper)
+
+    # Sort by arxiv_id (newer IDs first)
+    papers.sort(key=lambda p: p.arxiv_id, reverse=True)
+    return papers
+
+
 if __name__ == "__main__":
-    papers = fetch_recent_papers(days=3)
-    print(f"Found {len(papers)} papers from the last 3 days:\n")
+    papers = fetch_new_papers()
+    print(f"Found {len(papers)} papers from today's announcement:\n")
     for p in papers[:10]:
         print(p)
         print()

@@ -12,11 +12,12 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-from .arxiv_parser import fetch_recent_papers, Paper
+from .arxiv_parser import fetch_recent_papers, fetch_new_papers, Paper
 from .ranker import rank_by_similarity, rank_with_claude, load_keywords
 
 __all__ = [
     "fetch_recent_papers",
+    "fetch_new_papers",
     "Paper",
     "rank_by_similarity",
     "rank_with_claude",

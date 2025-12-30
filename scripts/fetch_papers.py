@@ -21,7 +21,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from catcharxiv import (
-    fetch_recent_papers, rank_by_similarity, rank_with_claude
+    fetch_recent_papers, fetch_new_papers, rank_by_similarity, rank_with_claude
 )
 
 
@@ -74,24 +74,19 @@ def main():
         c.strip() for c in os.environ["CATCHARXIV_CATEGORIES"].split(",")
     )
 
-    # Default: fetch latest announcement (like arXiv/new)
-    # --days N overrides to fetch N days instead
+    # Default: fetch today's announcement via RSS (matches arXiv/new exactly)
+    # --days N overrides to fetch N days via API instead
     use_new = args.days is None
-    fetch_days = 5 if use_new else args.days
 
     if use_new:
-        print("Fetching latest arXiv announcement...")
+        print("Fetching today's arXiv announcement via RSS...")
+        papers = fetch_new_papers(categories=categories)
+        fetch_days = 1  # For template display
+        print(f"Found {len(papers)} papers")
     else:
-        print(f"Fetching papers from the last {fetch_days} day(s)...")
-
-    papers = fetch_recent_papers(categories=categories, days=fetch_days)
-
-    # Filter to only the most recent announcement date
-    if use_new and papers:
-        latest_date = max(p.published.date() for p in papers)
-        papers = [p for p in papers if p.published.date() == latest_date]
-        print(f"Found {len(papers)} papers from {latest_date}")
-    else:
+        fetch_days = args.days
+        print(f"Fetching papers from the last {fetch_days} day(s) via API...")
+        papers = fetch_recent_papers(categories=categories, days=fetch_days)
         print(f"Found {len(papers)} papers")
 
     templates_dir = Path(__file__).parent.parent / "catcharxiv" / "templates"
