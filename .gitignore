@@ -34,3 +34,7 @@ output/
 
 # Data files (keywords, cache, etc.)
 data/
+
+# arXiv paper analysis folders
+critique_*/
+explain_*/
